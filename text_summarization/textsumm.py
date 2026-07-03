@@ -1,4 +1,5 @@
 import gradio as gr
+import re
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
@@ -13,9 +14,24 @@ model.to(device)
 def summarize(text):
 	if not text.strip():
 		return ""
+	word_count = len(text.split())
+	max_new_tokens = min(max(word_count // 3, 40), 120)
+	min_length = min(max(word_count // 8, 20), max_new_tokens - 5)
 	inputs = tokenizer(text, return_tensors="pt", truncation=True, max_length=1024).to(device)
-	generated = model.generate(**inputs, max_new_tokens=130, min_length=30, do_sample=False)
-	return tokenizer.decode(generated[0], skip_special_tokens=True)
+	generated = model.generate(
+		**inputs,
+		max_new_tokens=max_new_tokens,
+		min_length=min_length,
+		num_beams=4,
+		length_penalty=1.8,
+		no_repeat_ngram_size=3,
+		repetition_penalty=1.15,
+		early_stopping=True,
+		do_sample=False,
+	)
+	result = tokenizer.decode(generated[0], skip_special_tokens=True)
+	result = re.sub(r"\s+", " ", result).strip()
+	return result
 
 
 with gr.Blocks() as demo:
